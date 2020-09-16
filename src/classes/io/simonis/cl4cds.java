@@ -170,6 +170,7 @@ public class cl4cds {
             }
 
             if ("NULL class loader".equals(loader) ||
+                loader.contains("of 'bootstrap'") || // this is JDK 11 syntax
                 loader.contains("of <bootloader>") || // this is JDK 11 syntax
                 loader.contains("jdk/internal/loader/ClassLoaders$PlatformClassLoader" /* && source == jrt image */) ||
                 loader.contains("jdk/internal/loader/ClassLoaders$AppClassLoader" /* && source == jar file */)) {
@@ -186,14 +187,17 @@ public class cl4cds {
               else if (source != null && source.startsWith("jar:file:") && source.endsWith("!/")) {
                 sourceFile = source.substring("jar:file:".length(), source.length() - 2);
               }
+              else if (source != null && source.startsWith("jrt:")) {
+                sourceFile = source;
+              }
               else {
                 System.err.println("Skipping " + name + " from " + source + " - reason: unknown source format");
                 continue;
               }
-              if (!DumpFromClassFiles && Files.isDirectory(Paths.get(sourceFile))) {
-                System.err.println("Skipping " + name + " from " + sourceFile + " - reason: loaded from class file (try '-Dio.simonis.cl4cds.dumpFromClassFile=true')");
-                continue;
-              }
+              // if (!DumpFromClassFiles && Files.isDirectory(Paths.get(sourceFile))) {
+              //   System.err.println("Skipping " + name + " from " + sourceFile + " - reason: loaded from class file (try '-Dio.simonis.cl4cds.dumpFromClassFile=true')");
+              //   continue;
+              // }
               Status ret;
 
               if (sourceFile.endsWith(".jar") && sourceFile.contains(".jar!")) {
@@ -309,6 +313,9 @@ public class cl4cds {
   }
 
   private static Status checkClass(String name, String source) {
+    if (source.startsWith("jrt:")) {
+      return Status.OK;
+    }
     if (Files.isDirectory(Paths.get(source))) {
       try (InputStream in = new FileInputStream(source + name + ".class")) {
         if (classVersion(in) < 49) return Status.PRE_15;
@@ -324,7 +331,7 @@ public class cl4cds {
       try (JarFile jar = new JarFile(source)) {
         ZipEntry ze = jar.getEntry(name + ".class");
         if (ze != null) {
-          if (classVersion(jar.getInputStream(ze)) < 49) return Status.PRE_15;
+          if (classVersion(jar.getInputStream(ze)) < 51) return Status.PRE_15;
           return Status.OK;
         }
         else if (DBG) {
